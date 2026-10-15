@@ -899,7 +899,7 @@ body,button,input,textarea,select,.detail-content,.key-excerpt,.rich-editor,.sta
 
   <section class="archive-info" style="position:relative;z-index:2;margin:12px 0;padding:13px 15px;border:1px solid #d4d9ee;border-radius:13px;background:#edf2ff;color:#586281;font-size:12px;line-height:1.8">
     <b>📚 대표님 · 지배인님 카톡 지시·전달 전수 기록</b><div>2026.08.17~10.15 · 전체 1,226건 보존 (자동 분류 지시 후보 575건 / 그 외 대화 맥락 651건). 자동 분류는 확정 지시 판단이 아닙니다. 날짜별 원문을 최신순으로 살펴보세요. 기존 공지 65건도 그대로 유지합니다.</div>
-    <label style="display:inline-flex;align-items:center;gap:7px;margin-top:8px;font-weight:750"><input type="checkbox" id="archiveOnly" checked style="accent-color:#6866B1"> 카톡 원문만 보기 (해제 시 기존 공지도 함께 보기)</label>
+    <label style="display:inline-flex;align-items:center;gap:7px;margin-top:8px;font-weight:750"><input type="checkbox" id="archiveOnly" style="accent-color:#6866B1"> 카톡 원문만 보기 (해제 시 기존 공지도 함께 보기)</label>
     <label style="display:inline-flex;align-items:center;gap:7px;margin:8px 0 0 16px;font-weight:750"><input type="checkbox" id="directiveOnly" checked style="accent-color:#6866B1"> 지시 검색 후보만 보기 (해제 시 기타 대화도 포함)</label>
   </section>
   <section class="toolbar">
@@ -1134,16 +1134,44 @@ function renderEmojiLibrary(){
   selectedEmoji.textContent=sticker.value||'없음';
 }
 
+const EDITKEY='toyu_notice_edits_v2';
+function getEdits(){try{return JSON.parse(localStorage.getItem(EDITKEY)||'{}')}catch(_){return {}}}
 function loadNotices(){
+  const edits=getEdits();
+  if(edits.version===2){
+    const updates=edits.updates||{}, removed=new Set(edits.removed||[]);
+    return SEED.filter(n=>!removed.has(n.id)).map(n=>normalizeNotice(updates[n.id]?{...n,...updates[n.id]}:n))
+      .concat((edits.added||[]).map(normalizeNotice));
+  }
+  // 이전 버전에서 저장한 내용도 복구
   try{
-    const x=localStorage.getItem(STORAGE);
-    const arr=x?JSON.parse(x):[];
+    const x=localStorage.getItem(STORAGE), arr=x?JSON.parse(x):[];
     const removed=new Set(JSON.parse(localStorage.getItem(STORAGE+'_removed')||'[]'));
     const saved=new Map(arr.map(n=>[n.id,n]));
-    return SEED.filter(n=>!removed.has(n.id)).map(n=>normalizeNotice(saved.has(n.id)?{...n,...saved.get(n.id)}:n)).concat(arr.filter(n=>!SEED.some(s=>s.id===n.id)).map(normalizeNotice));
-  }catch(e){return JSON.parse(JSON.stringify(SEED)).map(normalizeNotice)}
+    return SEED.filter(n=>!removed.has(n.id)).map(n=>normalizeNotice(saved.has(n.id)?{...n,...saved.get(n.id)}:n))
+      .concat(arr.filter(n=>!SEED.some(a=>a.id===n.id)).map(normalizeNotice));
+  }catch(e){return SEED.map(normalizeNotice)}
 }
-function saveNotices(){localStorage.setItem(STORAGE,JSON.stringify(notices));render()}
+function saveNotices(){
+  const seedIDs=new Set(SEED.map(n=>n.id)), baseMap=new Map(SEED.map(n=>[n.id,n]));
+  const currentIDs=new Set(notices.map(n=>n.id));
+  const edits={version:2,updates:{},added:[],removed:SEED.filter(n=>!currentIDs.has(n.id)).map(n=>n.id)};
+  for(const n of notices){
+    if(!seedIDs.has(n.id)){edits.added.push(n);continue}
+    const base=normalizeNotice(baseMap.get(n.id));
+    if(JSON.stringify(n)!==JSON.stringify(base))edits.updates[n.id]=n;
+  }
+  try{
+    localStorage.setItem(EDITKEY,JSON.stringify(edits));
+    // 구버전 중복 데이터는 정상 저장 성공 후 정리해 저장 공간 확보
+    localStorage.removeItem(STORAGE);
+    localStorage.removeItem(STORAGE+'_removed');
+    render();return true;
+  }catch(e){
+    alert('저장 공간이 부족하거나 브라우저 저장이 차단되어 저장하지 못했습니다. 사진 용량을 줄이거나 백업을 이용해주세요.\n오류: '+e.message);
+    return false;
+  }
+}
 function readMap(){try{return JSON.parse(localStorage.getItem(READKEY)||'{}')}catch(e){return {}}}
 function readEntry(id){const m=readMap(),d=day();return m[currentStaff]?.[d]?.[id]||null}
 function isRead(id){return !!readEntry(id)}
@@ -1323,7 +1351,7 @@ function compress(file){
     };im.onerror=reject;im.src=r.result};r.onerror=reject;r.readAsDataURL(file)
   })
 }
-function deleteNotice(id){if(!requireAdmin())return;if(!confirm('이 공지를 삭제할까요? 삭제 뒤에도 새로고침으로 되살아나지 않습니다.'))return;const removed=new Set(JSON.parse(localStorage.getItem(STORAGE+'_removed')||'[]'));removed.add(id);localStorage.setItem(STORAGE+'_removed',JSON.stringify([...removed]));notices=notices.filter(n=>n.id!==id);closeD('detailDialog');saveNotices()}
+function deleteNotice(id){if(!requireAdmin())return;if(!confirm('이 공지를 삭제할까요? 삭제 뒤에도 새로고침으로 되살아나지 않습니다.'))return;const prev=notices;notices=notices.filter(n=>n.id!==id);if(saveNotices()){closeD('detailDialog')}else{notices=prev}}
 function exec(cmd,val=null){contentEditor.focus();document.execCommand(cmd,false,val)}
 function wrapGowun(){
   const sel=window.getSelection();if(!sel.rangeCount||sel.isCollapsed)return;
@@ -1364,7 +1392,9 @@ document.getElementById('adminModeBtn').addEventListener('click',()=>{adminMode=
 addBtn.addEventListener('click',()=>openEdit());
 markAllBtn.addEventListener('click',()=>{notices.filter(n=>n.priority==='urgent'||n.priority==='updated').forEach(n=>setRead(n.id,true));render()});
 document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>closeD(b.dataset.close)));
-document.querySelectorAll('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d)d.close()}));
+// 편집창 바깥 클릭 시 닫히지 않도록 보호
+// 상세보기 역시 명시적인 닫기 버튼으로만 닫습니다.
+document.getElementById('editDialog').addEventListener('cancel',e=>{e.preventDefault();alert('작성 중인 내용이 있습니다. 저장하기 또는 취소 버튼을 이용해주세요.');});
 document.querySelectorAll('.rich-btn[data-cmd]').forEach(b=>b.addEventListener('click',()=>exec(b.dataset.cmd)));
 highlightBtn.addEventListener('click',highlightSelection);
 gowunBtn.addEventListener('click',wrapGowun);
@@ -1373,6 +1403,14 @@ clearFormatBtn.addEventListener('click',()=>exec('removeFormat'));
 imageInput.addEventListener('change',async e=>{
   for(const f of [...e.target.files].slice(0,8)){try{tempImages.push(await compress(f))}catch(_){}}imagePreview();e.target.value=''
 });
+// 입력 중 임시 초안: 탭 이동·실수로 창 종료해도 복구 가능
+const DRAFTKEY='toyu_notice_draft_v1';
+function captureDraft(){return {id:nid.value,priority:priority.value,category:category.value,timing:timing.value,source:source.value,title:title.value,keywords:keywords.value,date:date.value,html:contentEditor.innerHTML,changeNote:changeNote.value,cardTone:cardTone.value,sticker:sticker.value,titleFont:titleFont.value,titleWeight:titleWeight.value,titleSize:titleSize.value,titleColor:titleColor.value,titleAccent:titleAccent.value,imageLayout:imageLayout.value}}
+function saveDraft(){if(!editDialog.open)return;try{localStorage.setItem(DRAFTKEY,JSON.stringify(captureDraft()))}catch(_){}}
+noticeForm.addEventListener('input',saveDraft);
+contentEditor.addEventListener('input',saveDraft);
+const originalOpenEdit=openEdit;
+openEdit=function(id=null){originalOpenEdit(id);if(id)return;try{const v=JSON.parse(localStorage.getItem(DRAFTKEY)||'null');if(v&&v.title&&confirm('이전에 작성하다 만 공지가 있습니다. 이어서 작성하시겠어요?')){for(const k of ['priority','category','timing','source','title','keywords','date','changeNote','cardTone','sticker','titleFont','titleWeight','titleSize','titleColor','titleAccent','imageLayout']){const el=document.getElementById(k);if(el&&v[k]!=null)el.value=v[k]}contentEditor.innerHTML=sanitizeRich(v.html||'');}}catch(_){}};
 noticeForm.addEventListener('submit',e=>{
   e.preventDefault();if(!requireAdmin())return;
   const id=nid.value||('user-'+Date.now());
@@ -1386,8 +1424,12 @@ noticeForm.addEventListener('submit',e=>{
     imageLayout:imageLayout.value,
     titleStyle:{font:titleFont.value,weight:titleWeight.value,size:titleSize.value,color:titleColor.value,accent:titleAccent.value}
   };
-  const i=notices.findIndex(x=>x.id===id);if(i>=0)notices[i]=n;else notices.unshift(n);
-  closeD('editDialog');saveNotices()
+  const before=notices.slice();const i=notices.findIndex(x=>x.id===id);if(i>=0)notices[i]=n;else notices.unshift(n);
+  if(saveNotices()){
+    archiveOnly.checked=false;directiveOnly.checked=false;heartOnly=false;memoOnly=false;unreadOnly=false;readOnly=false;activePriority='all';activeCategory='all';searchInput.value='';timingSelect.value='all';sortSelect.value='newest';
+    document.querySelectorAll('#priorityChips [data-priority]').forEach(b=>b.classList.toggle('active',b.dataset.priority==='all'));
+    localStorage.removeItem(DRAFTKEY);closeD('editDialog');render();alert('공지가 저장되었습니다. 목록 맨 위에서 확인할 수 있습니다.');
+  }else notices=before
 });
 exportBtn.addEventListener('click',()=>{
   const blob=new Blob([JSON.stringify({version:3,notices,personal:personalData(),reads:readMap()},null,2)],{type:'application/json'});
@@ -1398,7 +1440,7 @@ importFile.addEventListener('change',e=>{
   r.onload=()=>{try{
     const d=JSON.parse(r.result);if(!Array.isArray(d.notices))throw Error();
     if(!requireAdmin())return; if(confirm('백업 내용으로 현재 공지를 교체할까요?')){
-      notices=d.notices.map(normalizeNotice);localStorage.setItem(STORAGE,JSON.stringify(notices));localStorage.setItem(STORAGE+'_removed',JSON.stringify(SEED.map(x=>x.id).filter(id=>!notices.some(n=>n.id===id))));
+      const before=notices;notices=d.notices.map(normalizeNotice);if(!saveNotices()){notices=before;return;}
       if(d.personal)localStorage.setItem(PERSONALKEY,JSON.stringify(d.personal));
       if(d.reads)localStorage.setItem(READKEY,JSON.stringify(d.reads));render()
     }
