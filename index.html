@@ -1,4 +1,4 @@
-<!doctype html>
+l<!doctype html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -842,6 +842,12 @@ body,button,input,textarea,select,.detail-content,.key-excerpt,.rich-editor,.sta
 .preview-card p{margin:9px 0 0;font:12px/1.6 'NexonGothic',sans-serif;color:#656a7e}
 .rich-toolbar .rich-btn:focus-visible,.style-grid select:focus-visible{outline:2px solid #7775c6;outline-offset:2px}
 </style>
+<style>
+#toyuTocToggle{position:fixed;right:16px;bottom:22px;z-index:900;border:0;border-radius:24px;padding:13px 18px;background:#fff4da;color:#57559b;font-weight:800;box-shadow:0 8px 28px #25204a55}
+#toyuToc{position:fixed;right:16px;top:50%;transform:translateY(-50%);width:min(310px,calc(100vw - 32px));max-height:82vh;z-index:901;background:#fffaf0;border:2px solid #d8d3fa;border-radius:23px;padding:16px;box-shadow:0 15px 45px #25204a66;display:none;color:#343850}
+#toyuToc.open{display:flex;flex-direction:column;gap:10px}#toyuToc h3{margin:0;font-size:18px}#toyuToc .toc-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}#toyuToc button{border:1px solid #d9d7ee;border-radius:12px;padding:10px 7px;background:#fff;color:#57559b;font-weight:700}#toyuToc button:hover{background:#e7f6f0;transform:translateY(-1px)}#toyuTocList{overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:7px;min-height:0}#toyuTocList button{text-align:left;font-size:12px}#toyuTocList button.active{background:#c9eee2;border-color:#80cbb7}#toyuTocList small{opacity:.65}
+@media(max-width:600px){#toyuToc{top:auto;bottom:12px;transform:none;max-height:75vh}#toyuTocToggle{bottom:16px}}
+</style>
 </head>
 <body>
 <div class="page">
@@ -1507,6 +1513,27 @@ importFile.addEventListener('change',e=>{
 updateClock();
 setInterval(updateClock,30000);
 render();
+</script>
+<button id="toyuTocToggle" type="button" aria-controls="toyuToc">☰ 업무 목차</button>
+<aside id="toyuToc" aria-label="업무별 이동 목차"><h3>✦ TOYU NOTE 목차</h3><div class="toc-actions"><button type="button" id="tocTop">↑ 맨 위로</button><button type="button" id="tocBottom">↓ 맨 아래로</button><button type="button" id="tocNext">⌄ 다음 업무</button><button type="button" id="tocClose">× 목차 닫기</button></div><div id="toyuTocList"></div></aside>
+<script>
+(function(){
+ const panel=document.getElementById('toyuToc'),toggle=document.getElementById('toyuTocToggle'),list=document.getElementById('toyuTocList');
+ const groups=[['✦ 필독·중요','priority'],['🏨 프런트','프런트'],['🛎 체크인','체크인'],['🚪 체크아웃','체크아웃'],['🛏 객실','객실'],['🔎 인스펙','인스펙'],['🍽 레스토랑','레스토랑'],['📅 식당 예약','레스토랑예약'],['🍚 조식','조식'],['☕ 음료','음료'],['📋 예약','예약'],['💳 가격·재고','가격·재고'],['💬 고객응대','CS'],['♡ 리뷰','리뷰'],['🌿 고객편의','고객편의'],['🌅 오픈','오픈'],['🌙 마감','마감'],['🛠 시설','시설'],['⚠ 안전','안전'],['✨ 브랜드','브랜드'],['📌 공통','공통']];
+ let index=-1;
+ function go(i){index=(i+groups.length)%groups.length;const g=groups[index][1];
+   if(g==='priority'){document.querySelector('[data-priority="urgent"]')?.click()}else{document.querySelector('#categoryChips [data-cat="'+g+'"]')?.click()}
+   document.getElementById('grid')?.scrollIntoView({behavior:'smooth',block:'start'});paint();
+ }
+ function paint(){let counts={};try{(notices||[]).filter(n=>!n.archived).forEach(n=>counts[n.category]=(counts[n.category]||0)+1)}catch(e){}
+ list.innerHTML='';groups.forEach(([label,cat],i)=>{if(cat!=='priority'&&!counts[cat])return;const b=document.createElement('button');b.type='button';b.className=i===index?'active':'';b.textContent=label+' '+(cat==='priority'?'':`(${counts[cat]})`);b.onclick=()=>go(i);list.appendChild(b)})}
+ toggle.onclick=()=>{panel.classList.toggle('open');toggle.style.display=panel.classList.contains('open')?'none':'';paint()};
+ document.getElementById('tocClose').onclick=()=>{panel.classList.remove('open');toggle.style.display=''};
+ document.getElementById('tocTop').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});
+ document.getElementById('tocBottom').onclick=()=>window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+ document.getElementById('tocNext').onclick=()=>go(index+1);
+ new MutationObserver(()=>{if(panel.classList.contains('open'))paint()}).observe(document.getElementById('categoryChips'),{childList:true});
+})();
 </script>
 </body>
 </html>
