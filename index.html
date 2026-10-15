@@ -834,6 +834,13 @@ body,button,input,textarea,select,.detail-content,.key-excerpt,.rich-editor,.sta
 .title-font-gothic{font-family:'GmarketSans','NexonGothic',sans-serif}
 .title-font-batang,.rich-content .gowun,.rich-editor .gowun{font-family:'NexonGothic',sans-serif}
 @media(max-width:680px){body.admin-mode .top-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px} .topbar{flex-wrap:wrap} .top-actions #adminModeBtn{display:inline-flex}}
+
+/* 관리자 꾸미기 실시간 미리보기 */
+.style-live-preview{padding:12px;background:#f5f3ff;border:1px solid #dcdcf5;border-radius:12px;margin-bottom:10px}
+.preview-card{background:#e9e9ff;border:1px solid #b9baff;border-radius:12px;padding:15px;transition:background .16s}
+.preview-card strong{display:inline;font-family:'GmarketSans',sans-serif;font-weight:700;font-size:19px;line-height:1.5;color:#4c5263}
+.preview-card p{margin:9px 0 0;font:12px/1.6 'NexonGothic',sans-serif;color:#656a7e}
+.rich-toolbar .rich-btn:focus-visible,.style-grid select:focus-visible{outline:2px solid #7775c6;outline-offset:2px}
 </style>
 </head>
 <body>
@@ -962,6 +969,7 @@ body,button,input,textarea,select,.detail-content,.key-excerpt,.rich-editor,.sta
 
       <div class="field full" style="margin-top:12px">
         <label>카드 스타일</label>
+        <div id="styleLivePreview" class="style-live-preview" aria-live="polite"><div id="previewCard" class="preview-card"><strong id="previewTitle">카드 제목 미리보기</strong><p id="previewBody">색상과 글꼴 변경이 이곳에 바로 표시됩니다.</p></div></div>
         <div class="style-grid">
           <div class="field">
             <label>카드 컬러</label>
@@ -1331,7 +1339,7 @@ function openEdit(id=null){
     cardTone.value='auto';sticker.value='';titleFont.value='gothic';titleWeight.value='700';titleSize.value='19';
     titleColor.value='#4C5263';titleAccent.value='none';imageLayout.value='wide';contentEditor.innerHTML=''
   }
-  imagePreview();renderEmojiLibrary();if(!editDialog.open)editDialog.showModal()
+  imagePreview();renderEmojiLibrary();if(!editDialog.open)editDialog.showModal();updateStylePreview()
 }
 function imagePreview(){
   imgprev.innerHTML=tempImages.map((x,i)=>`<div class="imgbox"><img src="${x}"><button type="button" onclick="tempImages.splice(${i},1);imagePreview()">×</button></div>`).join('')
@@ -1388,6 +1396,24 @@ document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',
 // 편집창 바깥 클릭 시 닫히지 않도록 보호
 // 상세보기 역시 명시적인 닫기 버튼으로만 닫습니다.
 document.getElementById('editDialog').addEventListener('cancel',e=>{e.preventDefault();alert('작성 중인 내용이 있습니다. 저장하기 또는 취소 버튼을 이용해주세요.');});
+// 선택한 글자를 유지한 채 서식 버튼을 누를 수 있게 함
+document.querySelectorAll('.rich-toolbar button').forEach(btn=>btn.addEventListener('mousedown',e=>e.preventDefault()));
+const toneColors={auto:'#E9E9FF',violet:'#E7E7FF',blue:'#DDEEF9',pink:'#F8DCE6',mint:'#E1F3EA',yellow:'#FFF0C7'};
+function updateStylePreview(){
+  const pc=document.getElementById('previewCard');if(!pc)return;
+  const t=document.getElementById('previewTitle');
+  pc.style.background=toneColors[cardTone.value]||toneColors.auto;
+  t.textContent=title.value.trim()||'카드 제목 미리보기';
+  t.style.fontFamily=titleFont.value==='batang'?"'NexonGothic',sans-serif":"'GmarketSans',sans-serif";
+  t.style.fontWeight=titleWeight.value;t.style.fontSize=titleSize.value+'px';t.style.color=titleColor.value;
+  t.style.textDecoration=titleAccent.value==='underline'?'underline':'none';
+  t.style.background=titleAccent.value==='box'?'rgba(255,255,255,.75)':titleAccent.value==='highlight'?'linear-gradient(transparent 50%,#fff 50%)':'transparent';
+  t.style.padding=titleAccent.value==='box'?'4px 7px':'0';
+  t.style.borderRadius='6px';
+}
+['title','cardTone','titleFont','titleWeight','titleSize','titleColor','titleAccent'].forEach(key=>{
+ const el=document.getElementById(key);el.addEventListener('input',updateStylePreview);el.addEventListener('change',updateStylePreview);
+});
 document.querySelectorAll('.rich-btn[data-cmd]').forEach(b=>b.addEventListener('click',()=>exec(b.dataset.cmd)));
 highlightBtn.addEventListener('click',highlightSelection);
 gowunBtn.addEventListener('click',wrapGowun);
@@ -1403,12 +1429,14 @@ function saveDraft(){if(!editDialog.open)return;try{localStorage.setItem(DRAFTKE
 noticeForm.addEventListener('input',saveDraft);
 contentEditor.addEventListener('input',saveDraft);
 const originalOpenEdit=openEdit;
-openEdit=function(id=null){originalOpenEdit(id);if(id)return;try{const v=JSON.parse(localStorage.getItem(DRAFTKEY)||'null');if(v&&v.title&&confirm('이전에 작성하다 만 공지가 있습니다. 이어서 작성하시겠어요?')){for(const k of ['priority','category','timing','source','title','keywords','date','changeNote','cardTone','sticker','titleFont','titleWeight','titleSize','titleColor','titleAccent','imageLayout']){const el=document.getElementById(k);if(el&&v[k]!=null)el.value=v[k]}contentEditor.innerHTML=sanitizeRich(v.html||'');}}catch(_){}};
+openEdit=function(id=null){originalOpenEdit(id);if(id)return;try{const v=JSON.parse(localStorage.getItem(DRAFTKEY)||'null');if(v&&v.title&&confirm('이전에 작성하다 만 공지가 있습니다. 이어서 작성하시겠어요?')){for(const k of ['priority','category','timing','source','title','keywords','date','changeNote','cardTone','sticker','titleFont','titleWeight','titleSize','titleColor','titleAccent','imageLayout']){const el=document.getElementById(k);if(el&&v[k]!=null)el.value=v[k]}contentEditor.innerHTML=sanitizeRich(v.html||'');updateStylePreview();}}catch(_){}};
 noticeForm.addEventListener('submit',e=>{
   e.preventDefault();if(!requireAdmin())return;
   const id=nid.value||('user-'+Date.now());
   const safeHtml=sanitizeRich(contentEditor.innerHTML);
+  const previous=notices.find(x=>x.id===id);
   const n={
+    ...(previous||{}),
     id,priority:priority.value,category:category.value,timing:timing.value.trim()||'필요 시',
     source:sourceRole(source.value.trim()||'직접 입력'),title:title.value.trim(),
     keywords:keywords.value.split(',').map(x=>x.trim().replace(/^#/,'')).filter(Boolean),
